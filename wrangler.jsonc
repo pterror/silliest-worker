@@ -1,0 +1,11 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "files",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-08-16",
+	"observability": {
+		"enabled": true
+	},
+	"placement": { "mode": "smart" },
+	"r2_buckets": [{ "binding": "FILES", "bucket_name": "silliestfiles" }]
+}
