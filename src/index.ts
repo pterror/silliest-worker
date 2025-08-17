@@ -73,15 +73,20 @@ export default class extends WorkerEntrypoint<Env> {
 							return response('No file to upload', { status: 400 });
 						}
 						let body = request.body;
-						const key = await getRandomFileName(this.env);
+						let key = await getRandomFileName(this.env);
+						const [teedBody, mimetypeStream] = request.body.tee();
+						body = teedBody;
+						const reader = mimetypeStream.getReader({ mode: 'byob' });
+						const buffer = new Uint8Array(8192);
+						reader.read(buffer);
+						const filetype = fileType(buffer);
+						const mime = filetype?.[1] ?? 'application/octet-stream';
 						if (!request.headers.has('content-type')) {
-							const [teedBody, mimetypeStream] = request.body.tee();
-							body = teedBody;
-							const reader = mimetypeStream.getReader({ mode: 'byob' });
-							const buffer = new Uint8Array(8192);
-							reader.read(buffer);
-							const mime = fileType(buffer)?.[1] ?? 'application/octet-stream';
 							request.headers.set('content-type', mime);
+						}
+						const ext = filetype?.[0];
+						if (ext) {
+							key += `.${ext}`;
 						}
 						try {
 							await this.env.FILES.put(key, body, {
