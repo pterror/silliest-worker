@@ -4,7 +4,7 @@
 declare namespace Cloudflare {
 	interface Env {
 		FILES: R2Bucket;
-        AUTH_KEY_SECRET: string;
+        ACCESS_KEYS: string;
 	}
 }
 interface Env extends Cloudflare.Env {}
