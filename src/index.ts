@@ -65,7 +65,9 @@ export default class extends WorkerEntrypoint<Env> {
 						} catch {
 							return new Response('Error uploading file', { status: 500 });
 						}
-						return new Response(`Put ${key} successfully!`);
+						return new Response(`https://files.sillie.st/${key}`, {
+							headers: [['content-type', 'text/plain']],
+						});
 					}
 				}
 			}
