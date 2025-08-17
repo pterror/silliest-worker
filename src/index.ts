@@ -1,4 +1,5 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
+import { fileType } from './filetype.mjs';
 
 const hasValidHeader = (request: Request, env: Env) => {
 	const authHeader = request.headers.get('Authorization');
@@ -42,9 +43,22 @@ export default class extends WorkerEntrypoint<Env> {
 						if (!hasValidHeader(request, this.env)) {
 							return new Response('You are not authorized', { status: 401 });
 						}
-						const key = url.searchParams.get('fileName') || (await getRandomFileName(this.env));
+						if (!request.body) {
+							return new Response('No file to upload', { status: 400 });
+						}
+						let body = request.body;
+						const key = await getRandomFileName(this.env);
+						if (!request.headers.has('content-type')) {
+							const [teedBody, mimetypeStream] = request.body.tee();
+							body = teedBody;
+							const reader = mimetypeStream.getReader({ mode: 'byob' });
+							const buffer = new Uint8Array(8192);
+							reader.read(buffer);
+							const mime = fileType(buffer)?.[1] ?? 'application/octet-stream';
+							request.headers.set('content-type', mime);
+						}
 						try {
-							await this.env.FILES.put(key, request.body, {
+							await this.env.FILES.put(key, body, {
 								onlyIf: request.headers,
 								httpMetadata: request.headers,
 							});
