@@ -21,11 +21,11 @@ function getRandomString(length: number) {
 	return result;
 }
 
-async function getRandomFileName(env: Env) {
+async function getRandomFileName(env: Env, ext: string) {
 	let length = INIITAL_FILENAME_LENGTH;
 	while (true) {
 		for (let i = 0; i < TRIES_PER_LENGTH; i += 1) {
-			const candidate = getRandomString(length);
+			const candidate = `${getRandomString(length)}${ext}`;
 			if (!(await env.FILES.head(candidate))) {
 				return candidate;
 			}
@@ -72,22 +72,26 @@ export default class extends WorkerEntrypoint<Env> {
 						if (!request.body) {
 							return response('No file to upload', { status: 400 });
 						}
-						let body = request.body;
-						let key = await getRandomFileName(this.env);
-						const [teedBody, mimetypeStream] = request.body.tee();
-						body = teedBody;
+						let ext = '';
+						const [body, mimetypeStream] = request.body.tee();
 						const reader = mimetypeStream.getReader({ mode: 'byob' });
-						const buffer = new Uint8Array(8192);
-						reader.read(buffer);
-						const filetype = fileType(buffer);
-						const mime = filetype?.[1] ?? 'application/octet-stream';
-						if (!request.headers.has('content-type')) {
-							request.headers.set('content-type', mime);
+						const buffer = new ArrayBuffer(8192);
+						const view = new DataView(buffer);
+						const { value } = await reader.read(view);
+						reader.releaseLock();
+						if (value) {
+							const filetype = fileType(new Uint8Array(value.buffer));
+							const mime = filetype?.[1] ?? 'application/octet-stream';
+							if (!request.headers.has('content-type')) {
+								request.headers.set('content-type', mime);
+							}
+							const detectedExt = filetype?.[0];
+							if (detectedExt) {
+								ext = `.${detectedExt}`;
+							}
 						}
-						const ext = filetype?.[0];
-						if (ext) {
-							key += `.${ext}`;
-						}
+						let key = await getRandomFileName(this.env, ext);
+						await mimetypeStream.cancel();
 						try {
 							await this.env.FILES.put(key, body, {
 								onlyIf: request.headers,
