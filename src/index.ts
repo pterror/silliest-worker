@@ -60,6 +60,7 @@ export default class extends WorkerEntrypoint<Env> {
 						return response(null, {
 							headers: [
 								['allow', 'PUT'],
+								['access-control-allow-origin', '*'],
 								['access-control-allow-methods', 'PUT'],
 								['access-control-allow-headers', 'authorization,content-type,x-requested-with'],
 							],
