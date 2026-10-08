@@ -13,8 +13,7 @@
           let pkgs = nixpkgs.legacyPackages.${system}; in
           pkgs.mkShell rec {
             packages = with pkgs; [
-	            nodejs_20
-              corepack
+	            wrangler
             ];
           });
     };

@@ -1,5 +1,7 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { fileType } from './filetype.mjs';
+import { getExtensionFromRequest } from './extension';
+import { EXTENSION_MIME_TYPES } from './mime-types';
 
 const hasValidHeader = (request: Request, env: Env) => {
 	const authHeader = request.headers.get('Authorization');
@@ -43,8 +45,8 @@ function response(body?: BodyInit | null, init?: ResponseInit): Response {
 				? init.headers instanceof Headers
 					? init.headers
 					: Symbol.iterator in init.headers
-					? [...init.headers].map((header) => [...header])
-					: Object.entries(init.headers)
+						? [...init.headers].map((header) => [...header])
+						: Object.entries(init.headers)
 				: []),
 		],
 	});
@@ -74,6 +76,7 @@ export default class extends WorkerEntrypoint<Env> {
 							return response('No file to upload', { status: 400 });
 						}
 						let ext = '';
+						const headers = new Headers(request.headers);
 						const [body, mimetypeStream] = request.body.tee();
 						const reader = mimetypeStream.getReader({ mode: 'byob' });
 						const buffer = new ArrayBuffer(8192);
@@ -83,20 +86,29 @@ export default class extends WorkerEntrypoint<Env> {
 						if (value) {
 							const filetype = fileType(new Uint8Array(value.buffer));
 							const mime = filetype?.[1] ?? 'application/octet-stream';
-							if (!request.headers.has('content-type')) {
-								request.headers.set('content-type', mime);
+							if (!headers.has('content-type')) {
+								headers.set('content-type', mime);
 							}
 							const detectedExt = filetype?.[0];
 							if (detectedExt) {
 								ext = `.${detectedExt}`;
 							}
 						}
+						// Fall back to extension from the request (?filename= or ?ext=) when content sniffing fails
+						const extension = getExtensionFromRequest(url);
+						if (extension) {
+							if (!ext) ext = `.${extension}`;
+							const extMime = EXTENSION_MIME_TYPES[extension];
+							if (extMime && (!request.headers.has('content-type') || headers.get('content-type') === 'application/octet-stream')) {
+								headers.set('content-type', extMime);
+							}
+						}
 						let key = await getRandomFileName(this.env, ext);
 						await mimetypeStream.cancel();
 						try {
 							await this.env.FILES.put(key, body, {
-								onlyIf: request.headers,
-								httpMetadata: request.headers,
+								onlyIf: headers,
+								httpMetadata: headers,
 							});
 						} catch {
 							return response('Error uploading file', { status: 500 });
